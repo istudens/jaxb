@@ -78,6 +78,9 @@ import com.sun.xml.bind.v2.runtime.JaxBeanInfo;
 import com.sun.xml.bind.v2.util.XmlFactory;
 
 import java.io.Closeable;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParserFactory;
 import org.w3c.dom.Document;
@@ -254,8 +257,30 @@ import org.xml.sax.helpers.DefaultHandler;
         // error handler as well.
         reader.setErrorHandler(coordinator);
 
+        final SecurityManager sm = System.getSecurityManager();
         try {
-            reader.parse(source);
+            if (sm != null) {
+                try {
+                    final XMLReader _reader = reader;
+                    final InputSource _source = source;
+                    AccessController.doPrivileged(new PrivilegedExceptionAction<Void>() {
+                        @Override
+                        public Void run() throws Exception {
+                            _reader.parse(_source);
+                            return null;
+                        }
+                    });
+                } catch (PrivilegedActionException pae) {
+                    final Exception originalException = pae.getException();
+                    if (originalException instanceof IOException) {
+                        throw (IOException) pae.getException();
+                    } else if (originalException instanceof SAXException) {
+                        throw (SAXException) pae.getException();
+                    }
+                }
+            } else {
+                reader.parse(source);
+            }
         } catch( IOException e ) {
             coordinator.clearStates();
             throw new UnmarshalException(e);
